@@ -1,14 +1,14 @@
 """
 Data Collection Modules
-RSS, Twitter, Reddit, Web Scrapers
+RSS, Reddit, Web Scrapers
 """
 
 from .rss_crawler import RSSCrawler
-from .twitter_crawler import TwitterCrawler
+from .reddit_crawler import RedditCrawler
 from .web_scraper import WebScraper
 
 __all__ = [
     "RSSCrawler",
-    "TwitterCrawler",
+    "RedditCrawler",
     "WebScraper",
 ]
