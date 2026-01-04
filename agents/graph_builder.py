@@ -66,7 +66,7 @@ class GraphBuilderAgent:
                 )
             )
             
-        # 3. Create claims
+        # 3. Create claims and link to entities
         for claim in state['claims']:
             self._create_claim(claim)
             operations.append(
@@ -78,17 +78,35 @@ class GraphBuilderAgent:
                 )
             )
             
-            # Link claim to entities mentioned
-            for entity in claim.get('mentioned_entities', []):
-                self._link_claim_to_entity(claim['id'], entity)
+            # Link claim to entities it mentions
+            # Try both 'about_entities' (from analyzer) and 'mentioned_entities' (legacy)
+            entity_ids = claim.get('about_entities', []) or claim.get('mentioned_entities', [])
+            for entity_id in entity_ids:
+                self._link_claim_to_entity(claim['id'], entity_id)
                 operations.append(
                     GraphOperation(
                         operation_type='LINK',
                         node_type='Claim->Entity',
-                        node_id=f"{claim['id']}->{entity}",
+                        node_id=f"{claim['id']}->{entity_id}",
                         properties={'relationship': 'ABOUT'}
                     )
                 )
+            
+            # If no explicit entity links, link to all entities from same source
+            if not entity_ids:
+                # Link to entities with matching source
+                claim_source = claim.get('source_id', '')
+                for entity in state['entities']:
+                    if entity.get('source_id', '') == claim_source:
+                        self._link_claim_to_entity(claim['id'], entity['id'])
+                        operations.append(
+                            GraphOperation(
+                                operation_type='LINK',
+                                node_type='Claim->Entity',
+                                node_id=f"{claim['id']}->{entity['id']}",
+                                properties={'relationship': 'MENTIONS'}
+                            )
+                        )
                 
             # Link contradictions
             for contradiction in claim.get('contradictions', []):
