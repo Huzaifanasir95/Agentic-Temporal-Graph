@@ -14,6 +14,9 @@ class AgentState(TypedDict):
     """
     # Input data
     raw_data: Dict[str, Any]  # Original article/post from Kafka
+    raw_text: str  # Combined text content
+    source: Optional[Dict[str, Any]]  # Source information
+    metadata: Dict[str, Any]  # Additional metadata
     
     # Extracted information
     entities: Annotated[List[Dict[str, Any]], operator.add]  # Entities found
@@ -33,6 +36,7 @@ class AgentState(TypedDict):
     graph_operations: Annotated[List[Dict[str, Any]], operator.add]  # Neo4j operations to perform
     
     # Metadata
+    processing_log: Annotated[List[Dict[str, Any]], operator.add]  # Processing history
     processed_by: Annotated[List[str], operator.add]  # Which agents processed this
     processing_time: Optional[float]  # Total processing time
     errors: Annotated[List[str], operator.add]  # Any errors encountered
@@ -99,6 +103,9 @@ def create_initial_state(raw_data: Dict[str, Any]) -> AgentState:
     """
     return AgentState(
         raw_data=raw_data,
+        raw_text='',
+        source=raw_data.get('source', {}),
+        metadata={},
         entities=[],
         events=[],
         claims=[],
@@ -108,6 +115,7 @@ def create_initial_state(raw_data: Dict[str, Any]) -> AgentState:
         similar_claims=[],
         contradictions=[],
         graph_operations=[],
+        processing_log=[],
         processed_by=[],
         processing_time=None,
         errors=[],
