@@ -67,12 +67,12 @@ def check_redis():
 def check_kafka():
     """Check Kafka connection"""
     try:
-        from kafka import KafkaProducer
-        producer = KafkaProducer(
+        from kafka.admin import KafkaAdminClient
+        client = KafkaAdminClient(
             bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092"),
             request_timeout_ms=5000
         )
-        producer.close()
+        client.close()
         logger.info("✓ Kafka: Connected")
         return True
     except Exception as e:
