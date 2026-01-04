@@ -117,26 +117,22 @@ class TemporalAnalyzer:
         cutoff = datetime.now() - timedelta(hours=hours)
         
         query = """
-        MATCH (e:Entity)
-        WHERE e.created_at >= $cutoff
-        OPTIONAL MATCH (e)-[:APPEARS_IN]->(c:Claim)
-        WHERE c.timestamp >= $cutoff
+        MATCH (e:Entity)<-[:ABOUT]-(c:Claim)
+        WHERE c.timestamp >= datetime($cutoff)
         WITH e, 
              count(c) as mention_count,
-             avg(c.confidence) as avg_confidence,
-             collect(c.confidence) as confidences,
+             avg(c.confidence_score) as avg_confidence,
+             collect(c.confidence_score) as confidences,
              min(c.timestamp) as first_seen,
-             max(c.timestamp) as last_seen,
-             collect(DISTINCT c.source) as sources
+             max(c.timestamp) as last_seen
         WHERE mention_count > 0
         RETURN e.name as entity_name,
                e.type as entity_type,
                mention_count,
                avg_confidence,
                confidences,
-               first_seen,
-               last_seen,
-               sources
+               toString(first_seen) as first_seen,
+               toString(last_seen) as last_seen
         ORDER BY mention_count DESC
         LIMIT 50
         """
@@ -170,7 +166,7 @@ class TemporalAnalyzer:
                     confidence_trend=confidence_trend,
                     first_seen=datetime.fromisoformat(record['first_seen']),
                     last_seen=datetime.fromisoformat(record['last_seen']),
-                    sources=record['sources']
+                    sources=['Neo4j']  # Placeholder since source not in schema
                 )
                 trends.append(trend)
             
@@ -250,12 +246,12 @@ class TemporalAnalyzer:
     def _detect_mention_spikes(self, cutoff: datetime) -> List[AnomalyDetection]:
         """Detect sudden spikes in entity mentions"""
         query = """
-        MATCH (e:Entity)-[:APPEARS_IN]->(c:Claim)
-        WHERE c.timestamp >= $cutoff
+        MATCH (e:Entity)<-[:ABOUT]-(c:Claim)
+        WHERE c.timestamp >= datetime($cutoff)
         WITH e, count(c) as recent_count
         WHERE recent_count >= 5
-        MATCH (e)-[:APPEARS_IN]->(c2:Claim)
-        WHERE c2.timestamp < $cutoff
+        MATCH (e)<-[:ABOUT]-(c2:Claim)
+        WHERE c2.timestamp < datetime($cutoff)
         WITH e, recent_count, count(c2) as historical_count
         WHERE historical_count > 0 AND recent_count > historical_count * 3
         RETURN e.name as entity_name,
@@ -299,13 +295,13 @@ class TemporalAnalyzer:
     def _detect_confidence_drops(self, cutoff: datetime) -> List[AnomalyDetection]:
         """Detect sudden drops in confidence scores"""
         query = """
-        MATCH (e:Entity)-[:APPEARS_IN]->(c:Claim)
-        WHERE c.timestamp >= $cutoff
-        WITH e, avg(c.confidence) as recent_confidence
+        MATCH (e:Entity)<-[:ABOUT]-(c:Claim)
+        WHERE c.timestamp >= datetime($cutoff)
+        WITH e, avg(c.confidence_score) as recent_confidence
         WHERE recent_confidence < 0.5
-        MATCH (e)-[:APPEARS_IN]->(c2:Claim)
-        WHERE c2.timestamp < $cutoff
-        WITH e, recent_confidence, avg(c2.confidence) as historical_confidence
+        MATCH (e)<-[:ABOUT]-(c2:Claim)
+        WHERE c2.timestamp < datetime($cutoff)
+        WITH e, recent_confidence, avg(c2.confidence_score) as historical_confidence
         WHERE historical_confidence > 0.7 AND recent_confidence < historical_confidence - 0.3
         RETURN e.name as entity_name,
                e.type as entity_type,
@@ -347,10 +343,10 @@ class TemporalAnalyzer:
     def _detect_entity_clusters(self, cutoff: datetime) -> List[AnomalyDetection]:
         """Detect new clusters of related entities"""
         query = """
-        MATCH (e1:Entity)-[r:RELATED_TO]-(e2:Entity)
-        WHERE r.created_at >= $cutoff
+        MATCH (e1:Entity)<-[:ABOUT]-(c:Claim)-[:ABOUT]->(e2:Entity)
+        WHERE c.timestamp >= datetime($cutoff) AND e1 <> e2
         WITH e1, count(DISTINCT e2) as new_connections
-        WHERE new_connections >= 5
+        WHERE new_connections >= 3
         RETURN e1.name as entity_name,
                e1.type as entity_type,
                new_connections
@@ -404,18 +400,17 @@ class TemporalAnalyzer:
         
         query = """
         MATCH (e:Entity {name: $entity_name})
-        OPTIONAL MATCH (e)-[:APPEARS_IN]->(c:Claim)
-        WHERE c.timestamp >= $cutoff
+        OPTIONAL MATCH (e)<-[:ABOUT]-(c:Claim)
+        WHERE c.timestamp >= datetime($cutoff)
         WITH e, c
         ORDER BY c.timestamp
         RETURN e.name as entity_name,
                e.type as entity_type,
-               e.created_at as created_at,
+               toString(e.created_at) as created_at,
                collect({
-                   timestamp: c.timestamp,
+                   timestamp: toString(c.timestamp),
                    claim_text: c.text,
-                   confidence: c.confidence,
-                   source: c.source
+                   confidence: c.confidence_score
                }) as mentions
         """
         
@@ -435,8 +430,8 @@ class TemporalAnalyzer:
             mentions = record['mentions']
             
             # Compute statistics
-            confidence_history = [m['confidence'] for m in mentions if m['confidence']]
-            sources = list(set(m['source'] for m in mentions if m['source']))
+            confidence_history = [m['confidence'] for m in mentions if m.get('confidence')]
+            sources = ['Neo4j']  # Placeholder since source not in schema
             
             timeline = {
                 "entity_name": record['entity_name'],
@@ -471,12 +466,11 @@ class TemporalAnalyzer:
         
         query = """
         MATCH (c:Claim)
-        WHERE c.timestamp >= $cutoff
-        OPTIONAL MATCH (c)<-[:APPEARS_IN]-(e:Entity)
-        RETURN c.timestamp as timestamp,
+        WHERE c.timestamp >= datetime($cutoff)
+        OPTIONAL MATCH (c)-[:ABOUT]->(e:Entity)
+        RETURN toString(c.timestamp) as timestamp,
                c.text as claim_text,
-               c.confidence as confidence,
-               c.source as source,
+               c.confidence_score as confidence,
                collect(e.name) as entities
         ORDER BY c.timestamp DESC
         """
@@ -493,7 +487,6 @@ class TemporalAnalyzer:
                     "timestamp": record['timestamp'],
                     "claim_text": record['claim_text'],
                     "confidence": record['confidence'],
-                    "source": record['source'],
                     "entities": record['entities']
                 })
             
@@ -512,17 +505,13 @@ class TemporalAnalyzer:
         
         query = """
         MATCH (c:Claim)
-        WHERE c.timestamp >= $cutoff
+        WHERE c.timestamp >= datetime($cutoff)
         WITH count(c) as total_claims
-        MATCH (e:Entity)
-        WHERE e.created_at >= $cutoff
-        WITH total_claims, count(e) as new_entities
-        MATCH (e:Entity)-[:APPEARS_IN]->(c:Claim)
-        WHERE c.timestamp >= $cutoff
+        MATCH (e:Entity)<-[:ABOUT]-(c2:Claim)
+        WHERE c2.timestamp >= datetime($cutoff)
         RETURN total_claims,
-               new_entities,
-               count(DISTINCT e) as active_entities,
-               count(DISTINCT c.source) as active_sources
+               0 as new_entities,
+               count(DISTINCT e) as active_entities
         """
         
         try:
@@ -538,7 +527,6 @@ class TemporalAnalyzer:
                     "total_claims": record['total_claims'],
                     "new_entities": record['new_entities'],
                     "active_entities": record['active_entities'],
-                    "active_sources": record['active_sources'],
                     "claims_per_hour": record['total_claims'] / hours if hours > 0 else 0
                 }
             

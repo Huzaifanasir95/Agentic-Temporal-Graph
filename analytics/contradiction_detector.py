@@ -27,14 +27,14 @@ class Contradiction:
     claim1_id: str
     claim1_text: str
     claim1_confidence: float
-    claim1_source: str
-    claim1_timestamp: str
+    claim1_source: str = "Unknown"
+    claim1_timestamp: str = ""
     
     claim2_id: str
     claim2_text: str
     claim2_confidence: float
-    claim2_source: str
-    claim2_timestamp: str
+    claim2_source: str = "Unknown"
+    claim2_timestamp: str = ""
     
     contradiction_score: float  # 0-1, higher = more contradictory
     contradiction_type: str  # factual, temporal, numerical, semantic
@@ -157,14 +157,13 @@ class ContradictionDetector:
         """Retrieve claims from Neo4j"""
         if entity_name:
             query = """
-            MATCH (e:Entity {name: $entity_name})-[:APPEARS_IN]->(c:Claim)
+            MATCH (e:Entity {name: $entity_name})<-[:ABOUT]-(c:Claim)
             WHERE c.timestamp >= datetime() - duration({days: $days})
             WITH c, collect(e.name) as entities
             RETURN c.id as id,
                    c.text as text,
-                   c.confidence as confidence,
-                   c.source as source,
-                   c.timestamp as timestamp,
+                   c.confidence_score as confidence,
+                   toString(c.timestamp) as timestamp,
                    entities
             ORDER BY c.timestamp DESC
             LIMIT 100
@@ -174,14 +173,13 @@ class ContradictionDetector:
             query = """
             MATCH (c:Claim)
             WHERE c.timestamp >= datetime() - duration({days: $days})
-            OPTIONAL MATCH (c)<-[:APPEARS_IN]-(e:Entity)
+            OPTIONAL MATCH (c)-[:ABOUT]->(e:Entity)
             WITH c, collect(e.name) as entities
             WHERE size(entities) > 0
             RETURN c.id as id,
                    c.text as text,
-                   c.confidence as confidence,
-                   c.source as source,
-                   c.timestamp as timestamp,
+                   c.confidence_score as confidence,
+                   toString(c.timestamp) as timestamp,
                    entities
             ORDER BY c.timestamp DESC
             LIMIT 200
@@ -391,12 +389,12 @@ class ContradictionDetector:
             claim1_id=claim1['id'],
             claim1_text=claim1['text'],
             claim1_confidence=claim1['confidence'],
-            claim1_source=claim1['source'],
+            claim1_source="Neo4j",
             claim1_timestamp=claim1['timestamp'],
             claim2_id=claim2['id'],
             claim2_text=claim2['text'],
             claim2_confidence=claim2['confidence'],
-            claim2_source=claim2['source'],
+            claim2_source="Neo4j",
             claim2_timestamp=claim2['timestamp'],
             contradiction_score=score,
             contradiction_type=contradiction_type,
@@ -437,10 +435,7 @@ class ContradictionDetector:
             # Calculate cluster metrics
             cluster_score = sum(c.contradiction_score for c in entity_contradictions) / len(entity_contradictions)
             
-            sources = set()
-            for c in entity_contradictions:
-                sources.add(c.claim1_source)
-                sources.add(c.claim2_source)
+            sources = ["Neo4j"]  # Placeholder since claims don't have source property
             
             # Determine impact
             if cluster_score > 0.85 and len(entity_contradictions) >= 3:

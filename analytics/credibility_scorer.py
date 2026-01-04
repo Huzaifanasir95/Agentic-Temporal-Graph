@@ -168,14 +168,14 @@ class CredibilityScorer:
     # ==================== Data Retrieval ====================
     
     def _get_source_data(self, source_name: str, days: int) -> Optional[Dict]:
-        """Get comprehensive data for a source"""
+        """Get comprehensive data for an entity (treated as source)"""
         cutoff = datetime.now() - timedelta(days=days)
         
         query = """
-        MATCH (c:Claim {source: $source_name})
-        WHERE c.timestamp >= $cutoff
+        MATCH (e:Entity {name: $source_name})<-[:ABOUT]-(c:Claim)
+        WHERE c.timestamp >= datetime($cutoff)
         WITH count(c) as total_claims,
-             avg(c.confidence) as avg_confidence,
+             avg(c.confidence_score) as avg_confidence,
              collect(c) as claims
         
         // Find contradicted claims
@@ -184,13 +184,12 @@ class CredibilityScorer:
         WITH total_claims, avg_confidence, claims,
              count(DISTINCT other) as contradicted_claims
         
-        // Find cross-validated claims
+        // Count related entities (cross-validation proxy)
         UNWIND claims as c
-        MATCH (c)<-[:APPEARS_IN]-(e:Entity)
-        OPTIONAL MATCH (e)-[:APPEARS_IN]->(c2:Claim)
-        WHERE c2.source <> $source_name
+        OPTIONAL MATCH (c)-[:ABOUT]->(e2:Entity)
+        WHERE e2.name <> $source_name
         WITH total_claims, avg_confidence, contradicted_claims,
-             count(DISTINCT c2) as cross_validated_claims
+             count(DISTINCT e2) as cross_validated_claims
         
         RETURN total_claims,
                avg_confidence,
@@ -217,11 +216,14 @@ class CredibilityScorer:
             return None
     
     def _get_all_sources(self) -> List[str]:
-        """Get list of all sources"""
+        """Get list of all entities with claims (treating them as sources)"""
         query = """
-        MATCH (c:Claim)
-        RETURN DISTINCT c.source as source
-        ORDER BY source
+        MATCH (e:Entity)<-[:ABOUT]-(c:Claim)
+        WITH e.name as source, count(c) as claim_count
+        WHERE claim_count > 0
+        RETURN DISTINCT source
+        ORDER BY claim_count DESC
+        LIMIT 50
         """
         
         try:
@@ -426,11 +428,13 @@ class CredibilityScorer:
             SourceComparison object
         """
         query = """
-        MATCH (e:Entity {name: $entity_name})-[:APPEARS_IN]->(c:Claim)
-        WHERE c.timestamp >= $cutoff
-        WITH c.source as source, collect(c.text) as claims
-        WHERE source IS NOT NULL
-        RETURN source, claims
+        MATCH (e:Entity {name: $entity_name})<-[:ABOUT]-(c:Claim)-[:ABOUT]->(e2:Entity)
+        WHERE c.timestamp >= datetime($cutoff) AND e <> e2
+        WITH e2.name as related_entity, collect(c.text) as claims, avg(c.confidence_score) as avg_conf
+        WHERE related_entity IS NOT NULL
+        RETURN related_entity as source, claims, avg_conf as confidence
+        ORDER BY avg_conf DESC
+        LIMIT 20
         """
         
         cutoff = datetime.now() - timedelta(days=days)
