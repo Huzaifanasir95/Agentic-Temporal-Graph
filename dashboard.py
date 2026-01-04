@@ -874,6 +874,209 @@ with gr.Blocks(title="OSINT Intelligence Dashboard", theme=gr.themes.Soft()) as 
         - <0.80: Requires verification
         """)
     
+    # Enhanced Analytics (Phase 4B)
+    with gr.Tab("📊 Analytics"):
+        gr.Markdown("## Enhanced Intelligence Analytics")
+        gr.Markdown("Powered by temporal analysis, contradiction detection, and source credibility scoring")
+        
+        # Temporal Trends
+        with gr.Accordion("📈 Temporal Trends", open=True):
+            gr.Markdown("### Trending Entities & Patterns")
+            
+            trend_period = gr.Radio(
+                choices=["24h", "7d", "30d"],
+                value="24h",
+                label="Time Period"
+            )
+            
+            trends_btn = gr.Button("🔍 Analyze Trends", variant="primary")
+            trends_output = gr.JSON(label="Detected Trends")
+            
+            def get_trends(period):
+                try:
+                    response = requests.get(f"{API_BASE_URL}/analytics/trends?time_period={period}")
+                    if response.status_code == 200:
+                        return response.json()
+                    return {"error": f"Failed to get trends: {response.status_code}"}
+                except Exception as e:
+                    return {"error": str(e)}
+            
+            trends_btn.click(fn=get_trends, inputs=trend_period, outputs=trends_output)
+        
+        # Anomaly Detection
+        with gr.Accordion("⚠️ Anomaly Detection", open=False):
+            gr.Markdown("### Unusual Patterns & Spikes")
+            
+            anomaly_hours = gr.Slider(
+                minimum=1,
+                maximum=168,
+                value=24,
+                step=1,
+                label="Time Window (hours)"
+            )
+            
+            anomalies_btn = gr.Button("🔍 Detect Anomalies", variant="primary")
+            anomalies_output = gr.JSON(label="Detected Anomalies")
+            
+            def get_anomalies(hours):
+                try:
+                    response = requests.get(f"{API_BASE_URL}/analytics/anomalies?hours={int(hours)}")
+                    if response.status_code == 200:
+                        return response.json()
+                    return {"error": f"Failed to get anomalies: {response.status_code}"}
+                except Exception as e:
+                    return {"error": str(e)}
+            
+            anomalies_btn.click(fn=get_anomalies, inputs=anomaly_hours, outputs=anomalies_output)
+        
+        # Contradictions
+        with gr.Accordion("🔴 Contradiction Detection", open=False):
+            gr.Markdown("### Conflicting Claims & Inconsistencies")
+            
+            contradiction_days = gr.Slider(
+                minimum=1,
+                maximum=90,
+                value=7,
+                step=1,
+                label="Analysis Period (days)"
+            )
+            
+            contradiction_entity = gr.Textbox(
+                label="Entity Filter (optional)",
+                placeholder="Leave empty for all entities"
+            )
+            
+            contradictions_btn = gr.Button("🔍 Find Contradictions", variant="primary")
+            contradictions_output = gr.JSON(label="Detected Contradictions")
+            
+            def get_contradictions(days, entity):
+                try:
+                    url = f"{API_BASE_URL}/analytics/contradictions?days={int(days)}"
+                    if entity:
+                        url += f"&entity_name={entity}"
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        return response.json()
+                    return {"error": f"Failed to get contradictions: {response.status_code}"}
+                except Exception as e:
+                    return {"error": str(e)}
+            
+            contradictions_btn.click(
+                fn=get_contradictions,
+                inputs=[contradiction_days, contradiction_entity],
+                outputs=contradictions_output
+            )
+        
+        # Source Credibility
+        with gr.Accordion("🎯 Source Credibility Scoring", open=False):
+            gr.Markdown("### Source Reliability Analysis")
+            
+            credibility_days = gr.Slider(
+                minimum=1,
+                maximum=365,
+                value=30,
+                step=1,
+                label="Analysis Period (days)"
+            )
+            
+            credibility_source = gr.Textbox(
+                label="Source Name (optional)",
+                placeholder="Leave empty for all sources"
+            )
+            
+            credibility_btn = gr.Button("🎯 Score Credibility", variant="primary")
+            credibility_output = gr.JSON(label="Credibility Scores")
+            
+            def get_credibility(days, source):
+                try:
+                    url = f"{API_BASE_URL}/analytics/credibility?days={int(days)}"
+                    if source:
+                        url += f"&source_name={source}"
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        return response.json()
+                    return {"error": f"Failed to get credibility: {response.status_code}"}
+                except Exception as e:
+                    return {"error": str(e)}
+            
+            credibility_btn.click(
+                fn=get_credibility,
+                inputs=[credibility_days, credibility_source],
+                outputs=credibility_output
+            )
+        
+        # Entity Timeline
+        with gr.Accordion("⏱️ Entity Timeline", open=False):
+            gr.Markdown("### Track Entity Evolution Over Time")
+            
+            timeline_entity = gr.Textbox(
+                label="Entity Name",
+                placeholder="e.g., Venezuela, Trump, China..."
+            )
+            
+            timeline_days = gr.Slider(
+                minimum=1,
+                maximum=365,
+                value=30,
+                step=1,
+                label="Days to Look Back"
+            )
+            
+            timeline_btn = gr.Button("📅 Get Timeline", variant="primary")
+            timeline_output = gr.JSON(label="Entity Timeline")
+            
+            def get_timeline(entity, days):
+                try:
+                    response = requests.get(
+                        f"{API_BASE_URL}/analytics/entity-timeline/{entity}?days={int(days)}"
+                    )
+                    if response.status_code == 200:
+                        return response.json()
+                    return {"error": f"Failed to get timeline: {response.status_code}"}
+                except Exception as e:
+                    return {"error": str(e)}
+            
+            timeline_btn.click(
+                fn=get_timeline,
+                inputs=[timeline_entity, timeline_days],
+                outputs=timeline_output
+            )
+        
+        # Temporal Stats
+        with gr.Accordion("📊 Temporal Statistics", open=False):
+            gr.Markdown("### Overall System Activity Metrics")
+            
+            stats_period = gr.Radio(
+                choices=["24h", "7d", "30d"],
+                value="24h",
+                label="Time Period"
+            )
+            
+            stats_btn = gr.Button("📊 Get Statistics", variant="primary")
+            stats_output = gr.JSON(label="Temporal Statistics")
+            
+            def get_temporal_stats(period):
+                try:
+                    response = requests.get(f"{API_BASE_URL}/analytics/temporal-stats?time_period={period}")
+                    if response.status_code == 200:
+                        return response.json()
+                    return {"error": f"Failed to get stats: {response.status_code}"}
+                except Exception as e:
+                    return {"error": str(e)}
+            
+            stats_btn.click(fn=get_temporal_stats, inputs=stats_period, outputs=stats_output)
+        
+        gr.Markdown("""
+        ---
+        **Analytics Features:**
+        - 📈 **Temporal Trends**: Emerging entities, declining mentions, confidence trends
+        - ⚠️ **Anomaly Detection**: Sudden spikes, confidence drops, new entity clusters
+        - 🔴 **Contradiction Detection**: NLI-based semantic contradictions, factual conflicts
+        - 🎯 **Source Credibility**: 4-factor scoring (Accuracy 40%, Consistency 25%, Bias 20%, Reliability 15%)
+        - ⏱️ **Entity Timelines**: Complete evolution tracking with confidence trends
+        - 📊 **Temporal Stats**: Real-time activity metrics and throughput
+        """)
+    
     # API Information
     with gr.Tab("ℹ️ About"):
         gr.Markdown("""
@@ -910,6 +1113,14 @@ with gr.Blocks(title="OSINT Intelligence Dashboard", theme=gr.themes.Soft()) as 
         - `GET /entity/{id}/claims` - Entity claims
         - `GET /network/{name}` - Entity network
         - `GET /sources` - News sources
+        
+        **Phase 4B Analytics Endpoints:**
+        - `GET /analytics/trends` - Temporal trends
+        - `GET /analytics/anomalies` - Anomaly detection
+        - `GET /analytics/contradictions` - Contradiction detection
+        - `GET /analytics/credibility` - Source credibility
+        - `GET /analytics/entity-timeline/{name}` - Entity timeline
+        - `GET /analytics/temporal-stats` - Activity metrics
         
         **Status**: ✅ Production Ready
         

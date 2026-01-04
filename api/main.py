@@ -11,6 +11,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from graph.neo4j_client import Neo4jClient
+from analytics.temporal_analyzer import TemporalAnalyzer
+from analytics.contradiction_detector import ContradictionDetector
+from analytics.credibility_scorer import CredibilityScorer
 from loguru import logger
 
 app = FastAPI(
@@ -30,6 +33,11 @@ app.add_middleware(
 
 # Neo4j client
 neo4j_client = Neo4jClient()
+
+# Analytics components (Phase 4B)
+temporal_analyzer = TemporalAnalyzer(neo4j_client)
+contradiction_detector = ContradictionDetector(neo4j_client)
+credibility_scorer = CredibilityScorer(neo4j_client)
 
 
 # Response models
@@ -237,6 +245,232 @@ async def get_entity_network(entity_name: str, depth: int = Query(2, ge=1, le=3)
 async def shutdown_event():
     """Cleanup on shutdown"""
     neo4j_client.close()
+
+
+# ==================== Phase 4B: Enhanced Analytics Endpoints ====================
+
+@app.get("/analytics/trends", tags=["Analytics"])
+async def get_trends(time_period: str = Query("24h", regex="^(24h|7d|30d)$")):
+    """
+    Get temporal trends for entities
+    
+    Args:
+        time_period: Time window (24h, 7d, 30d)
+    
+    Returns:
+        List of detected trends with metrics
+    """
+    try:
+        trends = temporal_analyzer.detect_trends(time_period=time_period)
+        return {
+            "time_period": time_period,
+            "trend_count": len(trends),
+            "trends": [t.to_dict() for t in trends]
+        }
+    except Exception as e:
+        logger.error(f"Trends endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/anomalies", tags=["Analytics"])
+async def get_anomalies(hours: int = Query(24, ge=1, le=168)):
+    """
+    Get detected anomalies in temporal patterns
+    
+    Args:
+        hours: Time window in hours (1-168)
+    
+    Returns:
+        List of detected anomalies
+    """
+    try:
+        anomalies = temporal_analyzer.detect_anomalies(hours=hours)
+        return {
+            "time_window_hours": hours,
+            "anomaly_count": len(anomalies),
+            "anomalies": [a.to_dict() for a in anomalies]
+        }
+    except Exception as e:
+        logger.error(f"Anomalies endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/entity-timeline/{entity_name}", tags=["Analytics"])
+async def get_entity_timeline(entity_name: str, days: int = Query(30, ge=1, le=365)):
+    """
+    Get complete timeline of an entity's evolution
+    
+    Args:
+        entity_name: Name of entity
+        days: Number of days to look back
+    
+    Returns:
+        Timeline data with mentions and metrics
+    """
+    try:
+        timeline = temporal_analyzer.get_entity_timeline(entity_name, days)
+        if not timeline:
+            raise HTTPException(status_code=404, detail="Entity not found or no timeline data")
+        return timeline
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Entity timeline endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/contradictions", tags=["Analytics"])
+async def get_contradictions(
+    entity_name: Optional[str] = None,
+    days: int = Query(7, ge=1, le=90)
+):
+    """
+    Get detected contradictions between claims
+    
+    Args:
+        entity_name: Optional - filter by entity
+        days: Number of days to analyze
+    
+    Returns:
+        List of contradictions with severity scores
+    """
+    try:
+        contradictions = contradiction_detector.detect_contradictions(
+            entity_name=entity_name,
+            days=days
+        )
+        return {
+            "days_analyzed": days,
+            "entity_filter": entity_name,
+            "contradiction_count": len(contradictions),
+            "contradictions": [c.to_dict() for c in contradictions[:50]]  # Limit to 50
+        }
+    except Exception as e:
+        logger.error(f"Contradictions endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/contradiction-report", tags=["Analytics"])
+async def get_contradiction_report(days: int = Query(7, ge=1, le=90)):
+    """
+    Get comprehensive contradiction report with clustering
+    
+    Args:
+        days: Number of days to analyze
+    
+    Returns:
+        Detailed contradiction report with clusters
+    """
+    try:
+        report = contradiction_detector.generate_contradiction_report(days)
+        return report
+    except Exception as e:
+        logger.error(f"Contradiction report endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/credibility", tags=["Analytics"])
+async def get_source_credibility(
+    source_name: Optional[str] = None,
+    days: int = Query(30, ge=1, le=365)
+):
+    """
+    Get source credibility scores
+    
+    Args:
+        source_name: Optional - specific source to score
+        days: Number of days of history to consider
+    
+    Returns:
+        Credibility scores for source(s)
+    """
+    try:
+        if source_name:
+            # Single source
+            score = credibility_scorer.score_source(source_name, days)
+            return {
+                "source": source_name,
+                "score": score.to_dict()
+            }
+        else:
+            # All sources
+            scores = credibility_scorer.score_all_sources(days)
+            return {
+                "days_analyzed": days,
+                "source_count": len(scores),
+                "sources": {name: score.to_dict() for name, score in scores.items()}
+            }
+    except Exception as e:
+        logger.error(f"Credibility endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/credibility-report", tags=["Analytics"])
+async def get_credibility_report(days: int = Query(30, ge=1, le=365)):
+    """
+    Get comprehensive source credibility report
+    
+    Args:
+        days: Number of days to analyze
+    
+    Returns:
+        Detailed credibility report with categorization
+    """
+    try:
+        report = credibility_scorer.generate_credibility_report(days)
+        return report
+    except Exception as e:
+        logger.error(f"Credibility report endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/temporal-stats", tags=["Analytics"])
+async def get_temporal_stats(time_period: str = Query("24h", regex="^(24h|7d|30d)$")):
+    """
+    Get temporal statistics for the knowledge graph
+    
+    Args:
+        time_period: Time window (24h, 7d, 30d)
+    
+    Returns:
+        Comprehensive temporal statistics
+    """
+    try:
+        stats = temporal_analyzer.get_temporal_stats(time_period)
+        return stats
+    except Exception as e:
+        logger.error(f"Temporal stats endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/source-comparison/{entity_name}", tags=["Analytics"])
+async def compare_sources_on_entity(
+    entity_name: str,
+    days: int = Query(30, ge=1, le=365)
+):
+    """
+    Compare how different sources report on the same entity
+    
+    Args:
+        entity_name: Entity to analyze
+        days: Time window
+    
+    Returns:
+        Source comparison with agreement scores
+    """
+    try:
+        comparison = credibility_scorer.compare_sources(entity_name, days)
+        if not comparison:
+            raise HTTPException(
+                status_code=404,
+                detail="Not enough sources found for comparison"
+            )
+        return comparison.to_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Source comparison endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
