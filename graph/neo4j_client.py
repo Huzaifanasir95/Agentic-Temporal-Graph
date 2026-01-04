@@ -33,6 +33,21 @@ class Neo4jClient:
     def close(self):
         """Close connection"""
         self.driver.close()
+    
+    def execute_query(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Execute a Cypher query and return results
+        
+        Args:
+            query: Cypher query string
+            parameters: Query parameters
+            
+        Returns:
+            List of result records as dictionaries
+        """
+        with self.driver.session() as session:
+            result = session.run(query, parameters or {})
+            return [dict(record) for record in result]
         
     def find_similar_claims(
         self,

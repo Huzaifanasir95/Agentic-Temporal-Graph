@@ -18,6 +18,9 @@ from streaming.consumer import KafkaConsumerClient
 from ingestion import DataIngestionOrchestrator
 from health_monitor import HealthMonitor
 from alert_system import AlertSystem
+from analytics.temporal_analyzer import TemporalAnalyzer
+from analytics.contradiction_detector import ContradictionDetector
+from analytics.credibility_scorer import CredibilityScorer
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
@@ -51,6 +54,11 @@ class ContinuousOSINTProcessor:
         self.health_monitor = HealthMonitor()
         self.alert_system = AlertSystem()
         
+        # Enhanced Analytics (Phase 4B)
+        self.temporal_analyzer = TemporalAnalyzer()
+        self.contradiction_detector = ContradictionDetector()
+        self.credibility_scorer = CredibilityScorer()
+        
         # Kafka consumer for real-time processing
         self.consumer = KafkaConsumerClient(
             topics=['raw-feeds'],
@@ -67,6 +75,7 @@ class ContinuousOSINTProcessor:
             'total_failed': 0,
             'current_batch': 0,
             'last_collection_time': None,
+            'last_analytics_time': None,
             'start_time': datetime.now(),
             'uptime_seconds': 0
         }
@@ -113,8 +122,104 @@ class ContinuousOSINTProcessor:
         except Exception as e:
             logger.error(f"❌ RSS Collection failed: {e}")
             self.health_monitor.record_error('rss_collection', str(e))
+    
+    def run_analytics(self):
+        """
+        Scheduled task: Run enhanced analytics
+        Runs every hour to analyze trends, contradictions, and credibility
+        """
+        try:
+            logger.info("\n" + "="*60)
+            logger.info("🔍 Running Enhanced Analytics")
+            logger.info("="*60)
             
-    def process_article(self, message_value: Dict[str, Any]):
+            # 1. Temporal Analysis - Detect trends and anomalies
+            logger.info("📊 Analyzing temporal trends...")
+            trends = self.temporal_analyzer.detect_trends(time_period="24h")
+            anomalies = self.temporal_analyzer.detect_anomalies(hours=24)
+            
+            logger.info(f"  ✓ Detected {len(trends)} trends")
+            logger.info(f"  ✓ Detected {len(anomalies)} anomalies")
+            
+            # Alert on critical anomalies
+            critical_anomalies = [a for a in anomalies if a.severity == "critical"]
+            if critical_anomalies:
+                self.alert_system.send_alert(
+                    alert_type='ANOMALY',
+                    title=f"Critical Temporal Anomalies Detected",
+                    message=f"Found {len(critical_anomalies)} critical anomalies in temporal patterns",
+                    data={
+                        'anomalies': [a.to_dict() for a in critical_anomalies]
+                    },
+                    priority='CRITICAL'
+                )
+            
+            # 2. Contradiction Detection - Find conflicting claims
+            logger.info("⚠️  Detecting contradictions...")
+            contradictions = self.contradiction_detector.detect_contradictions(days=7)
+            
+            logger.info(f"  ✓ Found {len(contradictions)} contradictions")
+            
+            # Alert on high-severity contradictions
+            high_severity = [c for c in contradictions if c.severity in ["high", "critical"]]
+            if high_severity:
+                # Store contradictions in graph
+                for contradiction in high_severity[:5]:  # Top 5
+                    self.contradiction_detector.store_contradiction_in_graph(contradiction)
+                
+                self.alert_system.send_alert(
+                    alert_type='CONTRADICTION',
+                    title=f"High-Severity Contradictions Found",
+                    message=f"Detected {len(high_severity)} high-severity contradictions",
+                    data={
+                        'contradictions': [c.to_dict() for c in high_severity[:10]]
+                    },
+                    priority='HIGH'
+                )
+            
+            # 3. Source Credibility Scoring
+            logger.info("🎯 Scoring source credibility...")
+            credibility_scores = self.credibility_scorer.score_all_sources(days=30)
+            
+            logger.info(f"  ✓ Scored {len(credibility_scores)} sources")
+            
+            # Store credibility scores in graph
+            for source_name, credibility in credibility_scores.items():
+                self.credibility_scorer.store_credibility_in_graph(credibility)
+            
+            # Alert on questionable sources
+            questionable = [
+                (name, score) for name, score in credibility_scores.items()
+                if score.overall_score < 60
+            ]
+            if questionable:
+                self.alert_system.send_alert(
+                    alert_type='SYSTEM_ERROR',
+                    title=f"Low Credibility Sources Detected",
+                    message=f"Found {len(questionable)} sources with credibility scores < 60",
+                    data={
+                        'sources': [
+                            {'name': name, 'score': score.overall_score}
+                            for name, score in questionable
+                        ]
+                    },
+                    priority='MEDIUM'
+                )
+            
+            # Export analytics results
+            self.temporal_analyzer.export_trends("trends.json", "24h")
+            self.contradiction_detector.export_contradictions("contradictions.json", 7)
+            self.credibility_scorer.export_credibility_scores("credibility.json", 30)
+            
+            self.stats['last_analytics_time'] = datetime.now()
+            logger.info("✓ Enhanced analytics complete")
+            logger.info("="*60 + "\n")
+            
+        except Exception as e:
+            logger.error(f"Analytics failed: {e}")
+            self.health_monitor.record_error('analytics', str(e))
+            
+
         """
         Process a single article through the multi-agent pipeline
         
@@ -251,8 +356,9 @@ class ContinuousOSINTProcessor:
         
         This runs indefinitely until interrupted:
         1. Schedules RSS collection every 30 minutes
-        2. Continuously consumes and processes Kafka messages
-        3. Monitors health and sends alerts
+        2. Schedules enhanced analytics every 60 minutes
+        3. Continuously consumes and processes Kafka messages
+        4. Monitors health and sends alerts
         """
         try:
             logger.info("\n" + "="*60)
@@ -269,6 +375,16 @@ class ContinuousOSINTProcessor:
                 replace_existing=True
             )
             
+            # Schedule enhanced analytics (every 60 minutes)
+            self.scheduler.add_job(
+                self.run_analytics,
+                CronTrigger(minute='0'),  # Every hour on the hour
+                id='analytics',
+                name='Enhanced Analytics',
+                max_instances=1,
+                replace_existing=True
+            )
+            
             # Schedule status printing (every 5 minutes)
             self.scheduler.add_job(
                 self.print_status,
@@ -281,7 +397,7 @@ class ContinuousOSINTProcessor:
             
             # Start scheduler
             self.scheduler.start()
-            logger.info("✓ Scheduler started (RSS collection every 30 min)")
+            logger.info("✓ Scheduler started (RSS every 30 min, Analytics every 60 min)")
             
             # Run initial RSS collection
             logger.info("📡 Running initial RSS collection...")
