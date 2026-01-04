@@ -87,8 +87,8 @@ class GraphOperation(TypedDict):
     """Neo4j graph operation"""
     operation_type: str  # CREATE, MERGE, UPDATE, LINK
     node_type: Optional[str]  # Entity, Event, Claim, Source
+    node_id: str  # ID of the node
     properties: Dict[str, Any]
-    relationships: List[Dict[str, Any]]
 
 
 def create_initial_state(raw_data: Dict[str, Any]) -> AgentState:

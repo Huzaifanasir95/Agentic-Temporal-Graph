@@ -53,7 +53,7 @@ class Neo4jClient:
         MATCH (c:Claim)
         WHERE c.text CONTAINS $keyword
         RETURN c.id as id, c.text as text, c.confidence_score as confidence, 
-               c.timestamp as timestamp, c.verification_status as status
+               c.timestamp as timestamp
         LIMIT $limit
         """
         
@@ -201,10 +201,14 @@ class Neo4jClient:
     def get_stats(self) -> Dict[str, int]:
         """Get database statistics"""
         query = """
-        MATCH (e:Entity) WITH count(e) as entities
-        MATCH (c:Claim) WITH entities, count(c) as claims
-        MATCH (s:Source) WITH entities, claims, count(s) as sources
-        MATCH (ev:Event) WITH entities, claims, sources, count(ev) as events
+        OPTIONAL MATCH (e:Entity)
+        WITH count(e) as entities
+        OPTIONAL MATCH (c:Claim)
+        WITH entities, count(c) as claims
+        OPTIONAL MATCH (s:Source)
+        WITH entities, claims, count(s) as sources
+        OPTIONAL MATCH (ev:Event)
+        WITH entities, claims, sources, count(ev) as events
         RETURN entities, claims, sources, events
         """
         
