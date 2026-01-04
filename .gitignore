@@ -1,0 +1,126 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+htmlcov/
+coverage.xml
+
+# Models & Data
+models/nli_model/
+models/saved_models/
+models/*.pt
+models/*.pth
+models/*.bin
+models/*.onnx
+data/raw/
+data/processed/
+data/cache/
+*.parquet
+*.csv
+*.jsonl
+
+# Neo4j
+neo4j_data/
+neo4j_logs/
+neo4j_import/
+
+# Kafka
+kafka_data/
+
+# Docker volumes
+.docker/
+docker-compose.override.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.crt
+
+# Large files
+*.tar.gz
+*.zip
+*.rar
+
+# Ollama models (optional - can be large)
+.ollama/
+
+# IDE
+*.sublime-project
+*.sublime-workspace
+
+# Database backups
+*.sql
+*.db
+*.sqlite
+
+# Monitoring
+prometheus_data/
+grafana_data/

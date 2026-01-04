@@ -1,0 +1,255 @@
+# ==========================================
+# Application Configuration
+# Main settings for OSINT Analyst system
+# ==========================================
+
+# System
+system:
+  name: "Agentic OSINT Analyst"
+  version: "0.1.0"
+  environment: "development"
+  log_level: "INFO"
+
+# Neo4j Graph Database
+neo4j:
+  uri: "bolt://localhost:7687"
+  username: "neo4j"
+  password: "osint_password_2026"
+  database: "neo4j"
+  max_connections: 50
+  connection_timeout: 30
+  max_retry_attempts: 3
+
+# Kafka Streaming
+kafka:
+  bootstrap_servers: "localhost:29092"
+  consumer_group: "osint-processors"
+  auto_offset_reset: "earliest"
+  max_poll_records: 500
+  enable_auto_commit: true
+  session_timeout_ms: 30000
+  
+  topics:
+    raw_feeds: "raw-feeds"
+    processed_articles: "processed-articles"
+    extracted_claims: "extracted-claims"
+    graph_updates: "graph-updates"
+    alerts: "alerts"
+  
+  partitions:
+    raw_feeds: 3
+    processed_articles: 3
+    extracted_claims: 2
+    graph_updates: 2
+
+# Ollama LLM
+ollama:
+  base_url: "http://localhost:11434"
+  model: "deepseek-v3"  # or llama3:70b
+  timeout: 120
+  temperature: 0.7
+  max_tokens: 2048
+  num_ctx: 4096
+  top_p: 0.9
+  repeat_penalty: 1.1
+
+# Models
+models:
+  # NLI Model for fact verification
+  nli:
+    name: "microsoft/deberta-v3-base"
+    path: "./models/nli_model"
+    device: "cuda"  # cuda, cpu
+    batch_size: 32
+    max_length: 512
+    
+  # Embedding model for similarity
+  embedding:
+    name: "sentence-transformers/all-MiniLM-L6-v2"
+    dimension: 384
+    device: "cuda"
+    batch_size: 64
+    normalize: true
+    
+  # Spacy NER
+  spacy:
+    model: "en_core_web_sm"
+    disable_pipes: ["textcat"]
+
+# API Settings
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: true
+  title: "OSINT Analyst API"
+  description: "Multi-Agent OSINT Analysis System"
+  version: "0.1.0"
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8000"
+  cors_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+
+# Data Sources
+sources:
+  # RSS Feeds
+  rss:
+    enabled: true
+    feeds:
+      - url: "http://feeds.reuters.com/reuters/topNews"
+        name: "Reuters Top News"
+        category: "news"
+      - url: "http://feeds.bbci.co.uk/news/world/rss.xml"
+        name: "BBC World News"
+        category: "news"
+      - url: "https://www.aljazeera.com/xml/rss/all.xml"
+        name: "Al Jazeera"
+        category: "news"
+    fetch_interval: 300  # 5 minutes
+    max_articles_per_feed: 50
+    
+  # Twitter/X
+  twitter:
+    enabled: false  # Requires API keys
+    max_tweets_per_query: 100
+    rate_limit_window: 900  # 15 minutes
+    
+  # Reddit
+  reddit:
+    enabled: true
+    subreddits:
+      - "worldnews"
+      - "news"
+      - "politics"
+      - "geopolitics"
+    max_posts_per_subreddit: 50
+    fetch_interval: 600  # 10 minutes
+    
+  # Web Scraping
+  web_scraper:
+    enabled: true
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    timeout: 30
+    max_retries: 3
+    rate_limit_delay: 2  # seconds
+
+# Agent Configuration
+agents:
+  # Collector Agent
+  collector:
+    enabled: true
+    batch_size: 10
+    processing_timeout: 60
+    
+  # Analyzer Agent
+  analyzer:
+    enabled: true
+    min_text_length: 100
+    max_text_length: 10000
+    extract_entities: true
+    extract_events: true
+    extract_claims: true
+    
+  # Cross-Reference Agent
+  cross_reference:
+    enabled: true
+    similarity_threshold: 0.85
+    max_similar_claims: 10
+    temporal_window_days: 30
+    
+  # Bias Detection Agent
+  bias_detector:
+    enabled: true
+    min_confidence: 0.75
+    check_loaded_language: true
+    check_source_credibility: true
+    
+  # Graph Builder Agent
+  graph_builder:
+    enabled: true
+    batch_size: 50
+    merge_similar_entities: true
+    entity_similarity_threshold: 0.90
+    update_confidence_scores: true
+
+# Processing Configuration
+processing:
+  # Confidence thresholds
+  thresholds:
+    min_claim_confidence: 0.6
+    min_entity_confidence: 0.7
+    min_nli_confidence: 0.75
+    min_source_credibility: 0.4
+    
+  # Temporal settings
+  temporal:
+    claim_validity_days: 365
+    confidence_decay_rate: 0.01  # per day
+    entity_merge_window_hours: 24
+    
+  # Performance
+  max_concurrent_tasks: 10
+  task_timeout: 300  # seconds
+  retry_attempts: 3
+  retry_delay: 5  # seconds
+
+# Source Credibility
+credibility:
+  # Domain-based initial scores
+  trusted_domains:
+    "reuters.com": 0.95
+    "apnews.com": 0.94
+    "bbc.com": 0.92
+    "npr.org": 0.90
+    "theguardian.com": 0.88
+    
+  # Scoring factors
+  factors:
+    historical_accuracy_weight: 0.40
+    cross_verification_weight: 0.30
+    source_transparency_weight: 0.20
+    update_frequency_weight: 0.10
+    
+  # Bias detection
+  bias_indicators:
+    loaded_language_penalty: -0.1
+    unverified_claim_penalty: -0.15
+    correction_bonus: 0.05
+
+# Monitoring
+monitoring:
+  enable_metrics: true
+  metrics_port: 9090
+  enable_tracing: false
+  health_check_interval: 60
+  
+  alerts:
+    enable_alerts: true
+    alert_channels:
+      - "console"
+      # - "email"
+      # - "slack"
+    alert_thresholds:
+      high_contradiction_rate: 0.8
+      low_source_credibility: 0.3
+      claim_velocity_spike: 100  # claims per hour
+
+# Cache
+cache:
+  enabled: true
+  backend: "redis"  # redis, memory
+  ttl: 3600  # seconds
+  max_size_mb: 512
+
+# Security
+security:
+  enable_authentication: false  # Set to true in production
+  enable_rate_limiting: true
+  rate_limit_per_minute: 60
+  allowed_hosts:
+    - "localhost"
+    - "127.0.0.1"
